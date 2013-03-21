@@ -1,0 +1,14 @@
+*.nupkg
+*.sln.docstates
+*.suo
+*.user
+*.vsp
+Thumbs.db
+[Bb]in
+[Dd]ebug*/
+obj/
+packages/*
+!packages/repositories.config
+[Rr]elease*/
+_ReSharper*/
+*.orig

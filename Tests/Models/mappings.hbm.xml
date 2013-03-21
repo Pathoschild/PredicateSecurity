@@ -1,0 +1,17 @@
+﻿<?xml version="1.0"?>
+<hibernate-mapping xmlns="urn:nhibernate-mapping-2.2" auto-import="true">
+	<class name="Pathoschild.PredicateSecurity.Tests.Models.User, Pathoschild.PredicateSecurity.Tests" lazy="false" table="[User]">
+		<id name="ID">
+			<generator class="identity"/>
+		</id>
+		<property name="Name"/>
+	</class>
+	<class name="Pathoschild.PredicateSecurity.Tests.Models.BlogPost, Pathoschild.PredicateSecurity.Tests" lazy="false" table="[BlogPost]">
+		<id name="ID">
+			<generator class="identity"/>
+		</id>
+		<property name="Title"/>
+		<many-to-one name="Submitter" column="SubmitterID" fetch="join" />
+		<many-to-one name="Editor" column="EditorID" fetch="join" />
+	</class>
+</hibernate-mapping>
