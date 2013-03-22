@@ -8,6 +8,7 @@ using Pathoschild.PredicateSecurity.Internal;
 namespace Pathoschild.PredicateSecurity
 {
 	/// <summary>Filters collections of arbitrary elements using application-defined security predicates that match users to permission groups.</summary>
+	/// <typeparam name="TUser">The type of the user entity in the application.</typeparam>
 	/// <typeparam name="TUserKey">The type of the key which uniquely identifies the user.</typeparam>
 	/// <remarks>
 	/// This class implements content-relational security. It lets you define LINQ predicates that match users to relational groups (such as "blog-submitter" or "blog-owner"), assign permissions to those groups, and then filter arbitrary collections by specifying a required permission.
@@ -22,8 +23,18 @@ namespace Pathoschild.PredicateSecurity
 	/// IQueryable&lt;Blog&gt; canEdit = filter.Filter(db.Get&lt;Blog&gt;(), "blog-edit", user.ID);
 	/// </code>
 	/// </remarks>
-	public class PredicateFilter<TUserKey>
+	public class PredicateFilter<TUser, TUserKey>
 	{
+		/*********
+		** Properties
+		*********/
+		/// <summary>Get the key which uniquely identifies the user from the user entity.</summary>
+		protected readonly Func<TUser, TUserKey> GetUserKey;
+
+		/// <summary>Get the non-relational permissions for a user. These are permissions that are inherit to the user regardless of their relation to the content (e.g., site administrator).</summary>
+		protected readonly Func<TUser, IEnumerable<KeyValuePair<string, PermissionValue>>> GetGlobalPermissions;
+
+
 		/*********
 		** Accessors
 		*********/
@@ -35,8 +46,12 @@ namespace Pathoschild.PredicateSecurity
 		** Public methods
 		*********/
 		/// <summary>Construct an instance.</summary>
-		public PredicateFilter()
+		/// <param name="getUserKey">Get the key which uniquely identifies the user from the user entity.</param>
+		/// <param name="getGlobalPermissions">Get the non-relational permissions for a user. These are permissions that are inherit to the user regardless of their relation to the content (e.g., site administrator).</param>
+		public PredicateFilter(Func<TUser, TUserKey> getUserKey, Func<TUser, IEnumerable<KeyValuePair<string, PermissionValue>>> getGlobalPermissions = null)
 		{
+			this.GetUserKey = getUserKey;
+			this.GetGlobalPermissions = getGlobalPermissions;
 			this.Groups = new List<Group>();
 		}
 
@@ -45,7 +60,7 @@ namespace Pathoschild.PredicateSecurity
 		/// <param name="name">The name of the group.</param>
 		/// <param name="match">A predicate that returns true if this group applies for the input content and userKey.</param>
 		/// <returns>Returns the current instance for chaining.</returns>
-		public PredicateFilter<TUserKey> AddGroup<TContent>(string name, Expression<Func<TContent, int, bool>> match)
+		public PredicateFilter<TUser, TUserKey> AddGroup<TContent>(string name, Expression<Func<TContent, int, bool>> match)
 		{
 			this.Groups.Add(new Group(name, typeof(TContent), match));
 			return this;
@@ -56,7 +71,7 @@ namespace Pathoschild.PredicateSecurity
 		/// <param name="name">The name of the permission to add.</param>
 		/// <param name="value">The security behaviour to apply for this group permission.</param>
 		/// <returns>Returns the current instance for chaining.</returns>
-		public PredicateFilter<TUserKey> AddPermission(string groupName, string name, PermissionValue value)
+		public PredicateFilter<TUser, TUserKey> AddPermission(string groupName, string name, PermissionValue value)
 		{
 			// get group
 			Group group = this.Groups.FirstOrDefault(p => p.Name == groupName);
@@ -72,29 +87,44 @@ namespace Pathoschild.PredicateSecurity
 		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
 		/// <param name="content">The content to filter.</param>
 		/// <param name="permission">The name of the permission to predicate.</param>
-		/// <param name="userKey">The unique key of the user to pass to the group predicate.</param>
-		public IQueryable<TContent> Filter<TContent>(IQueryable<TContent> content, string permission, TUserKey userKey)
+		/// <param name="user">The user to pass to the group predicate.</param>
+		public IQueryable<TContent> Filter<TContent>(IQueryable<TContent> content, string permission, TUser user)
 		{
-			var predicate = this.BuildPredicate<TContent>(permission, userKey);
+			var predicate = this.BuildPredicate<TContent>(permission, user);
 			return content.Where(predicate);
 		}
 
 		/// <summary>Construct a predicate that returns true if the user has a permission for a content.</summary>
 		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
 		/// <param name="permission">The name of the permission to predicate.</param>
-		/// <param name="userKey">The unique key of the user to pass to the group predicate.</param>
-		Expression<Func<TContent, bool>> BuildPredicate<TContent>(string permission, TUserKey userKey)
+		/// <param name="user">The user to pass whose key to the group predicate.</param>
+		Expression<Func<TContent, bool>> BuildPredicate<TContent>(string permission, TUser user)
 		{
-			// get expressions
+			// init data
+			TUserKey userKey = this.GetUserKey(user);
+			List<Expression<Func<TContent, bool>>> allowExpressions = new List<Expression<Func<TContent, bool>>>();
+			List<Expression<Func<TContent, bool>>> denyExpressions = new List<Expression<Func<TContent, bool>>>();
+
+			// get non-relational permissions
+			if (this.GetGlobalPermissions != null)
+			{
+				IEnumerable<KeyValuePair<string, PermissionValue>> globalPermissions = this.GetGlobalPermissions(user).Where(p => p.Key.Equals(permission, StringComparison.InvariantCultureIgnoreCase));
+				if (globalPermissions.Any(p => p.Value == PermissionValue.Deny))
+					denyExpressions.Add(PredicateBuilder.True<TContent>());
+				if (globalPermissions.Any(p => p.Value == PermissionValue.Allow))
+					allowExpressions.Add(PredicateBuilder.True<TContent>());
+			}
+
+			// get relative permissions
 			Group[] groups = this.Groups.Where(p => p.Permissions.ContainsKey(permission)).ToArray();
-			Expression<Func<TContent, bool>>[] allowExpressions = this.GetPredicates<TContent>(groups.Where(p => p.Permissions[permission] == PermissionValue.Allow), userKey).ToArray();
-			Expression<Func<TContent, bool>>[] denyExpressions = this.GetPredicates<TContent>(groups.Where(p => p.Permissions[permission] == PermissionValue.Deny), userKey, negate: true).ToArray();
-			if (!allowExpressions.Any())
-				return this.GetConstantValuePredicate<TContent>(false);
+			allowExpressions.AddRange(this.GetPredicates<TContent>(groups.Where(p => p.Permissions[permission] == PermissionValue.Allow), userKey));
+			denyExpressions.AddRange(this.GetPredicates<TContent>(groups.Where(p => p.Permissions[permission] == PermissionValue.Deny), userKey, negate: true));
 
 			// build predicate
-			Expression<Func<TContent, bool>> allowPredicate = this.MergePredicates<TContent>(allowExpressions);
-			Expression<Func<TContent, bool>> denyPredicate = this.MergePredicates<TContent>(denyExpressions, BinaryOp.And);
+			if (!allowExpressions.Any())
+				return PredicateBuilder.False<TContent>();
+			Expression<Func<TContent, bool>> allowPredicate = this.MergePredicates<TContent>(allowExpressions.ToArray());
+			Expression<Func<TContent, bool>> denyPredicate = this.MergePredicates<TContent>(denyExpressions.ToArray(), BinaryOp.And);
 			Expression<Func<TContent, bool>> predicate = allowPredicate.And(denyPredicate);
 
 			return predicate;
@@ -112,7 +142,7 @@ namespace Pathoschild.PredicateSecurity
 		protected Expression<Func<TContent, bool>> MergePredicates<TContent>(Expression<Func<TContent, bool>>[] predicates, BinaryOp @operator = BinaryOp.Or, bool defaultReturnValue = true)
 		{
 			if (!predicates.Any())
-				return this.GetConstantValuePredicate<TContent>(defaultReturnValue);
+				return defaultReturnValue ? PredicateBuilder.True<TContent>() : PredicateBuilder.False<TContent>();
 
 			var predicate = predicates.First();
 			return predicates.Skip(1).Aggregate(predicate, (current, expression) => @operator == BinaryOp.Or ? current.Or(expression) : current.And(expression));
@@ -157,13 +187,18 @@ namespace Pathoschild.PredicateSecurity
 				predicate.Parameters
 			);
 		}
+	}
 
-		protected Expression<Func<TContent, bool>> GetConstantValuePredicate<TContent>(bool value)
-		{
-			return Expression.Lambda<Func<TContent, bool>>(
-				Expression.Equal(Expression.Constant(value), Expression.Constant(true)),
-				Expression.Parameter(typeof(TContent), "content")
-			);
-		}
+	/// <summary>Filters collections of arbitrary elements using application-defined security predicates that match users to permission groups.</summary>
+	/// <typeparam name="TUserKey">The type of the key which uniquely identifies the user.</typeparam>
+	/// <remarks>This is a wrapper for situations where you do not need to handle user entities. See the remarks on <see cref="PredicateFilter{TUser,TUserKey}"/>.</remarks>
+	public class PredicateFilter<TUserKey> : PredicateFilter<TUserKey, TUserKey>
+	{
+		/*********
+		** Public methods
+		*********/
+		/// <summary>Construct an instance.</summary>
+		public PredicateFilter()
+			: base(key => key) { }
 	}
 }

@@ -47,10 +47,10 @@ namespace Pathoschild.PredicateSecurity.Tests
 			Console.WriteLine("Inserting sample data...");
 			using (ISession session = this.SessionFactory.OpenSession())
 			{
-				IDictionary<string, User> users = base.GetTestUsers();
+				IDictionary<string, User> users = base.GetUsers();
 				foreach (User user in users.Values)
 					session.Save(user);
-				foreach (BlogPost post in base.GetTestPosts(users))
+				foreach (BlogPost post in base.GetPosts(users))
 					session.Save(post);
 			}
 
@@ -76,7 +76,7 @@ namespace Pathoschild.PredicateSecurity.Tests
 		*********/
 		/// <summary>Get the sample content with which to test security rules.</summary>
 		/// <param name="users">The sample users.</param>
-		protected override IQueryable<BlogPost> GetTestPosts(IDictionary<string, User> users)
+		protected override IQueryable<BlogPost> GetPosts(IDictionary<string, User> users)
 		{
 			return this.Session.Query<BlogPost>();
 		}
