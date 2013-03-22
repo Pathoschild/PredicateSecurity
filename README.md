@@ -5,9 +5,13 @@ using LINQ criteria, and then filter collections based on these security rules.
 You can also define global (non-relational) security permissions, such as for site administrators.
 These permissions are inherent to the user object.
 
-## Example
+## Usage
 ### Relational security
-For example, let's say you're building a blog app and want to define some complex access rules.
+The main goal of this library is to define _relational security permissions_. These are permissions
+that depend on a user's relationship with the content. For example, the _blog submitter_ is the user
+who submitted the blog post.
+
+For example, let's say you're building a blog app and want to define some relational access rules.
 Readers can see any published post, and editors can see their own draft posts and any draft post
 they're invited to contribute to. Blog editors can even block specific users, so they can't see
 their blog post. To make matters worse, these rules are all completely configurable and you have
@@ -16,23 +20,23 @@ plenty of other resources (not only blog posts).
 This is a pretty complex scenario to support, but PredicateSecurity makes it pretty easy. First you
 configure your security rules:
 ```c#
-var security = new PredicateFilter<int>();
+var security = new PredicateFilter<int>(); // int is the user identifier used in the predicates
 
 // define some security group rules (who is part of each group?)
 security
-   .AddGroup<BlogPost>("reader",      (blog, userId) => !blog.Draft)
-   .AddGroup<BlogPost>("submitter",   (blog, userId) => blog.Submitter.ID == userId)
-   .AddGroup<BlogPost>("contributor", (blog, userId) => blog.Contributors.Any(p => p.ID == userId))
-   .AddGroup<BlogPost>("banned",      (blog, userId) => blog.BannedUsers.Any(p => p.ID == userId));
+   .AddGroup<BlogPost>("blog-reader",      (blog, userId) => !blog.Draft)
+   .AddGroup<BlogPost>("blog-submitter",   (blog, userId) => blog.Submitter.ID == userId)
+   .AddGroup<BlogPost>("blog-contributor", (blog, userId) => blog.Contributors.Any(p => p.ID == userId))
+   .AddGroup<BlogPost>("banned",           (blog, userId) => blog.BannedUsers.Any(p => p.ID == userId));
 
 // define some permission rules (who can do what?)
 security
-   .AddPermission("reader",      "read", PermissionValue.Allow)
-   .AddPermission("submitter",   "read", PermissionValue.Allow)
-   .AddPermission("submitter",   "edit", PermissionValue.Allow)
-   .AddPermission("contributor", "read", PermissionValue.Allow)
-   .AddPermission("contributor", "edit", PermissionValue.Allow)
-   .AddPermission("banned",      "read", PermissionValue.Deny);
+   .AddPermission("blog-reader",      "read-blog", PermissionValue.Allow)
+   .AddPermission("blog-submitter",   "read-blog", PermissionValue.Allow)
+   .AddPermission("blog-submitter",   "edit-blog", PermissionValue.Allow)
+   .AddPermission("blog-contributor", "read-blog", PermissionValue.Allow)
+   .AddPermission("blog-contributor", "edit-blog", PermissionValue.Allow)
+   .AddPermission("banned",           "read-blog", PermissionValue.Deny);
 ```
 
 Now you can filter any collection of blog posts using your security rules. You can even do this on
@@ -43,8 +47,8 @@ optimized SQL.
 IQueryable<BlogPost> blogs = session.Query<BlogPost>();
 
 // what blog posts can I read or edit (given the security groups I'm a member of)?
-IQueryable<BlogPost> canRead = security.Filter(blogs, "read", user.ID);
-IQueryable<BlogPost> canEdit = security.Filter(blogs, "edit", user.ID);
+IQueryable<BlogPost> canRead = security.Filter(blogs, "read-blog", user.ID);
+IQueryable<BlogPost> canEdit = security.Filter(blogs, "edit-blog", user.ID);
 ```
 
 ### Global security
@@ -66,6 +70,14 @@ var security = new PredicateFilter<User, int>(
 And now you can use it the same way, passing in the `User` object directly:
 ```c#
 // what blog posts can I read or edit (given the security groups I'm a member of)?
-IQueryable<BlogPost> canRead = security.Filter(blogs, "read", user);
-IQueryable<BlogPost> canEdit = security.Filter(blogs, "edit", user);
+IQueryable<BlogPost> canRead = security.Filter(blogs, "read-blog", user);
+IQueryable<BlogPost> canEdit = security.Filter(blogs, "edit-blog", user);
+```
+
+### Testing a single content
+You can test a user's permission against a single content. For example:
+```c#
+// can I read or edit _this_ blog post?
+bool canRead = security.Test(blogPost, "read-blog", user);
+bool canEdit = security.Test(blogPost, "edit-blog", user);
 ```

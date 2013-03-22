@@ -94,6 +94,16 @@ namespace Pathoschild.PredicateSecurity
 			return content.Where(predicate);
 		}
 
+		/// <summary>Get whether a user has a permission on a specific content object.</summary>
+		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
+		/// <param name="content">The content to check.</param>
+		/// <param name="permission">The name of the permission to predicate.</param>
+		/// <param name="user">The user to pass to the group predicate.</param>
+		public bool Test<TContent>(TContent content, string permission, TUser user)
+		{
+			return this.Filter<TContent>(new[] { content }.AsQueryable(), permission, user).Any();
+		}
+
 		/// <summary>Construct a predicate that returns true if the user has a permission for a content.</summary>
 		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
 		/// <param name="permission">The name of the permission to predicate.</param>
