@@ -1,9 +1,10 @@
 **PredicateSecurity** provides relational security on content collections (including deferred LINQ
 queries for NHibernate or Entity Framework). This lets you define security groups and permissions
-using LINQ criteria, and then filter collections based on these security rules.
+using LINQ criteria, and then filter collections based on these security rules. The library also
+supports global (non-relational) security permissions, such as for site administrators.
 
-You can also define global (non-relational) security permissions, such as for site administrators.
-These permissions are inherent to the user object.
+You can use the PredicateFilter in your project by referencing the
+[`Pathoschild.PredicateSecurity` NuGet package](https://nuget.org/packages/Pathoschild.PredicateSecurity).
 
 ## Usage
 ### Relational security
