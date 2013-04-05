@@ -24,13 +24,13 @@ namespace Pathoschild.PredicateSecurity.Tests
 		/// <returns>Returns the titles of the blog posts to which the user has the permission.</returns>
 		/// <remarks>Each test case asserts security assumptions using the configuration set by <see cref="GetFilter"/>.</remarks>
 		[Test(Description = "Assert that the predicate filter correctly filters a collection based on a set of security rules.")]
-		
+
 		// John Submitter cannot approve any ideas because he is not the editor for any of them.
 		[TestCase("submitter", "post-approve", Result = "")]
-		
+
 		// John Submitter can edit his own ideas.
 		[TestCase("submitter", "post-edit", Result = "The best post, The most ambitious post")]
-		
+
 		// Jane Editor can approve the idea she is an editor for.
 		[TestCase("editor", "post-approve", Result = "The most ambitious post")]
 
@@ -42,7 +42,7 @@ namespace Pathoschild.PredicateSecurity.Tests
 
 		// Jesse SiteAdmin can edit any ideas in the system because of his global permissions.
 		[TestCase("siteAdmin", "post-edit", Result = "The best post, The most ambitious post, The forgotten post, The abandoned post")]
-		public string Filter_CorrectlyFilters(string user, string permission)
+		public string Filter_MatchesExpectedValues(string user, string permission)
 		{
 			// set up
 			PredicateFilter<User, int> filter = this.GetFilter();
@@ -58,11 +58,11 @@ namespace Pathoschild.PredicateSecurity.Tests
 			return String.Join(", ", titles);
 		}
 
-		/// <summary>Assert that the predicate filter's convenience <see cref="PredicateFilter{TUser,TUserKey}.Test{TContent}"/> method correctly matches.</summary>
+		/// <summary>Assert that the predicate filter's convenience <see cref="PredicateFilter{TUser,TUserKey}.Test{TContent}"/> method correctly matches relational permissions.</summary>
 		/// <param name="user">The name of the user defined by <see cref="GetUsers"/> whose security to predicate.</param>
 		/// <param name="permission">The permission to predicate.</param>
 		/// <returns>Returns whether the user has the permission for the given content.</returns>
-		/// <remarks>See the remarks on <see cref="Filter_CorrectlyFilters"/>.</remarks>
+		/// <remarks>See the remarks on <see cref="Filter_MatchesExpectedValues"/>.</remarks>
 		[Test(Description = "Assert that the predicate filter correctly filters a collection based on a set of security rules.")]
 		[TestCase("submitter", "post-approve", Result = "")]
 		[TestCase("submitter", "post-edit", Result = "The best post, The most ambitious post")]
@@ -70,7 +70,7 @@ namespace Pathoschild.PredicateSecurity.Tests
 		[TestCase("editor", "post-edit", Result = "The most ambitious post")]
 		[TestCase("siteAdmin", "post-approve", Result = "The best post, The most ambitious post, The abandoned post")]
 		[TestCase("siteAdmin", "post-edit", Result = "The best post, The most ambitious post, The forgotten post, The abandoned post")]
-		public string Filter_CorrectlyTests(string user, string permission)
+		public string Test_MatchesRelationalPermissions(string user, string permission)
 		{
 			// set up
 			PredicateFilter<User, int> filter = this.GetFilter();
@@ -84,6 +84,26 @@ namespace Pathoschild.PredicateSecurity.Tests
 				.Select(p => p.Title)
 				.ToArray();
 			return String.Join(", ", titles);
+		}
+
+		/// <summary>Assert that the predicate filter's convenience <see cref="PredicateFilter{TUser,TUserKey}.Test"/> method correctly matches global permissions.</summary>
+		/// <param name="userKey">The name of the user defined by <see cref="GetUsers"/> whose security to predicate.</param>
+		/// <param name="permission">The permission to predicate.</param>
+		/// <returns>Returns whether the user has the permission for the given content.</returns>
+		/// <remarks>See the remarks on <see cref="Filter_MatchesExpectedValues"/>.</remarks>
+		[Test(Description = "Assert that the predicate filter correctly filters a collection based on a set of security rules.")]
+		[TestCase("submitter", "post-approve", Result = false)]
+		[TestCase("submitter", "post-edit", Result = false)]
+		[TestCase("siteAdmin", "random-permission", Result = false)]
+		[TestCase("siteAdmin", "post-edit", Result = true)]
+		public bool Test_MatchesGlobalPermissions(string userKey, string permission)
+		{
+			// set up
+			PredicateFilter<User, int> filter = this.GetFilter();
+			User user = this.GetUsers()[userKey];
+
+			// test
+			return filter.Test(permission, user);
 		}
 
 

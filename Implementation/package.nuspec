@@ -3,12 +3,13 @@
 	<metadata>
 		<id>Pathoschild.PredicateSecurity</id>
 		<title>PredicateSecurity</title>
-		<version>0.1.0-alpha</version>
+		<version>0.2.0-alpha</version>
 		<authors>Jesse Plamondon-Willard</authors>
 		<description>Provides relational security on content collections (including deferred LINQ queries for NHibernate or Entity Framework). This lets you define security groups and permissions using LINQ criteria, and then filter collections based on these security rules.</description>
 		<licenseUrl>https://creativecommons.org/licenses/by/3.0/</licenseUrl>
 		<projectUrl>https://github.com/Pathoschild/PredicateSecurity#readme</projectUrl>
 		<iconUrl>https://upload.wikimedia.org/wikipedia/commons/thumb/d/d0/Noun_project_3067.svg/128px-Noun_project_3067.svg.png</iconUrl>
 		<requireLicenseAcceptance>false</requireLicenseAcceptance>
+		<releaseNotes>+ support checking only global permissions.</releaseNotes>
 	</metadata>
 </package>

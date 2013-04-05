@@ -94,6 +94,14 @@ namespace Pathoschild.PredicateSecurity
 			return content.Where(predicate);
 		}
 
+		/// <summary>Get whether a user has a global permission (ignoring content relations).</summary>
+		/// <param name="permission">The name of the permission to predicate.</param>
+		/// <param name="user">The user to pass to the group predicate.</param>
+		public bool Test(string permission, TUser user)
+		{
+			return this.CheckGlobalPermission(permission, user) == PermissionValue.Allow;
+		}
+
 		/// <summary>Get whether a user has a permission on a specific content object.</summary>
 		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
 		/// <param name="content">The content to check.</param>
@@ -118,10 +126,10 @@ namespace Pathoschild.PredicateSecurity
 			// get non-relational permissions
 			if (this.GetGlobalPermissions != null)
 			{
-				IEnumerable<KeyValuePair<string, PermissionValue>> globalPermissions = this.GetGlobalPermissions(user).Where(p => p.Key.Equals(permission, StringComparison.InvariantCultureIgnoreCase));
-				if (globalPermissions.Any(p => p.Value == PermissionValue.Deny))
+				PermissionValue globalValue = this.CheckGlobalPermission(permission, user);
+				if (globalValue == PermissionValue.Deny)
 					denyExpressions.Add(PredicateBuilder.True<TContent>());
-				if (globalPermissions.Any(p => p.Value == PermissionValue.Allow))
+				if (globalValue == PermissionValue.Allow)
 					allowExpressions.Add(PredicateBuilder.True<TContent>());
 			}
 
@@ -144,6 +152,22 @@ namespace Pathoschild.PredicateSecurity
 		/*********
 		** Protected methods
 		*********/
+		/// <summary>Get the value for a user's global permission.</summary>
+		/// <param name="permission">The name of the permission to predicate.</param>
+		/// <param name="user">The user to pass whose key to the group predicate.</param>
+		protected PermissionValue CheckGlobalPermission(string permission, TUser user)
+		{
+			if (this.GetGlobalPermissions != null)
+			{
+				IEnumerable<KeyValuePair<string, PermissionValue>> globalPermissions = this.GetGlobalPermissions(user).Where(p => p.Key.Equals(permission, StringComparison.InvariantCultureIgnoreCase));
+				if (globalPermissions.Any(p => p.Value == PermissionValue.Deny))
+					return PermissionValue.Deny;
+				if (globalPermissions.Any(p => p.Value == PermissionValue.Allow))
+					return PermissionValue.Allow;
+			}
+			return PermissionValue.Inherit;
+		}
+
 		/// <summary>Combine a sequence of predicates into a single predicate.</summary>
 		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
 		/// <param name="predicates">The predicates to combine.</param>
