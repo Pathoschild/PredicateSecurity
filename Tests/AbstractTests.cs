@@ -1,8 +1,8 @@
-﻿using System;
+﻿using NUnit.Framework;
+using Pathoschild.PredicateSecurity.Tests.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using NUnit.Framework;
-using Pathoschild.PredicateSecurity.Tests.Models;
 
 namespace Pathoschild.PredicateSecurity.Tests
 {
@@ -106,6 +106,37 @@ namespace Pathoschild.PredicateSecurity.Tests
 			return filter.Test(permission, user);
 		}
 
+		/// <summary>Assert that the predicate filter throws an exception if a group name is used for two different types when reusing group names is disabled.</summary>
+		/// <remarks>Each test case asserts security assumptions using the configuration set by <see cref="GetFilter"/>.</remarks>
+		[Test(Description = "Assert that the predicate filter throws an exception if a group name is used for two different types when reusing group names is disabled.")]
+		[TestCase(ExpectedException = typeof(InvalidOperationException))]
+		public void Filter_WithReusingGroupNamesDisabled_ThrowsException()
+		{
+			// set up
+			PredicateFilter<User, int> filter = this.GetFilter();
+
+			// test
+			filter.AddGroup<string>(filter.Groups.First().Name, (a, b) => true);
+		}
+
+		/// <summary>Assert that the predicate filter matches the correct permission if a a group name is used for two different types.</summary>
+		/// <remarks>Each test case asserts security assumptions using the configuration set by <see cref="GetFilter"/>.</remarks>
+		[Test(Description = "Assert that the predicate filter matches the correct permission if a a group name is used for two different types.")]
+		[TestCase("submitter", "post-edit", Result = false)]
+		[TestCase("submitter", "sample-permission", Result = true)]
+		public bool Filter_WithReusingGroupNamesEnabled_MatchesRelationalPermissions(string userKey, string permission)
+		{
+			// set up
+			PredicateFilter<User, int> filter = this.GetFilter();
+			User user = this.GetUsers()[userKey];
+			filter.AllowReusingGroupNames = true;
+			string groupName = filter.Groups.First().Name;
+			filter.AddGroup<string>(groupName, (a, b) => true);
+			filter.AddPermission<string>(groupName, "sample-permission", PermissionValue.Allow);
+
+			// test
+			return filter.Test<string>("", permission, user);
+		}
 
 		/*********
 		** Protected methods
@@ -122,10 +153,10 @@ namespace Pathoschild.PredicateSecurity.Tests
 			// submitters can edit their own posts, but are never allowed to approve them
 			// editors can edit and approve posts they're the editors for (as long as they're not submitters)
 			// and post-administrators-for-even-ids can edit and approve any post with an even ID (as long as they're not the submitter)
-			filter.AddPermission("post-submitter", "post-edit", PermissionValue.Allow);
-			filter.AddPermission("post-submitter", "post-approve", PermissionValue.Deny);
-			filter.AddPermission("post-editor", "post-edit", PermissionValue.Allow);
-			filter.AddPermission("post-editor", "post-approve", PermissionValue.Allow);
+			filter.AddPermission<BlogPost>("post-submitter", "post-edit", PermissionValue.Allow);
+			filter.AddPermission<BlogPost>("post-submitter", "post-approve", PermissionValue.Deny);
+			filter.AddPermission<BlogPost>("post-editor", "post-edit", PermissionValue.Allow);
+			filter.AddPermission<BlogPost>("post-editor", "post-approve", PermissionValue.Allow);
 
 			return filter;
 		}

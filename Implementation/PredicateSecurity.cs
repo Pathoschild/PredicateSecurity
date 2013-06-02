@@ -41,6 +41,9 @@ namespace Pathoschild.PredicateSecurity
 		/// <summary>The named groups of security permissions which can be matched to users.</summary>
 		public ICollection<Group> Groups { get; set; }
 
+		/// <summary>Allow a group name to be reused for multiple content types, which effectively creates multiple groups with the same name but separate permissions. This might make troubleshooting more difficult, but can be useful to support polymorphic scenarios.</summary>
+		public bool AllowReusingGroupNames { get; set; }
+
 
 		/*********
 		** Public methods
@@ -62,6 +65,13 @@ namespace Pathoschild.PredicateSecurity
 		/// <returns>Returns the current instance for chaining.</returns>
 		public PredicateFilter<TUser, TUserKey> AddGroup<TContent>(string name, Expression<Func<TContent, int, bool>> match)
 		{
+			// validate
+			if (this.Groups.Any(p => p.ContentType == typeof(TContent) && p.Name == name))
+				throw new InvalidOperationException(String.Format("Can't add the {0} security group for the {1} content type because it's already defined.", name, typeof(TContent)));
+			if (!this.AllowReusingGroupNames && this.Groups.Any(p => p.Name == name))
+				throw new InvalidOperationException(String.Format("Can't add the {0} security group for the {1} content type because it's already defined for another content type, and reusing group names has not been enabled.", name, typeof(TContent)));
+
+			// add group
 			this.Groups.Add(new Group(name, typeof(TContent), match));
 			return this;
 		}
@@ -71,12 +81,21 @@ namespace Pathoschild.PredicateSecurity
 		/// <param name="name">The name of the permission to add.</param>
 		/// <param name="value">The security behaviour to apply for this group permission.</param>
 		/// <returns>Returns the current instance for chaining.</returns>
-		public PredicateFilter<TUser, TUserKey> AddPermission(string groupName, string name, PermissionValue value)
+		public PredicateFilter<TUser, TUserKey> AddPermission<TContent>(string groupName, string name, PermissionValue value)
 		{
 			// get group
-			Group group = this.Groups.FirstOrDefault(p => p.Name == groupName);
+			Group group = this.Groups.FirstOrDefault(p => p.ContentType == typeof(TContent) && p.Name == groupName);
 			if (group == null)
-				throw new InvalidOperationException(String.Format("There is no group named '{0}'.", groupName));
+			{
+				if(!this.AllowReusingGroupNames)
+					throw new InvalidOperationException(String.Format("There is no group named '{0}'.", groupName));
+
+				string error = String.Format("There is no group named '{0}' for the {1} content type.", groupName, typeof(TContent));
+				Type[] definedForTypes = this.Groups.Where(p => p.Name == groupName).Select(p => p.ContentType).ToArray();
+				if (definedForTypes.Any())
+					error += String.Format(" (The name is defined for the following content types: {0}.)", String.Join(", ", definedForTypes.Select(p => p.FullName)));
+				throw new InvalidOperationException(error);
+			}
 
 			// add permission
 			group.Permissions[name] = value;
@@ -134,7 +153,7 @@ namespace Pathoschild.PredicateSecurity
 			}
 
 			// get relative permissions
-			Group[] groups = this.Groups.Where(p => p.Permissions.ContainsKey(permission)).ToArray();
+			Group[] groups = this.Groups.Where(p => p.Permissions.ContainsKey(permission) && p.ContentType == typeof(TContent)).ToArray();
 			allowExpressions.AddRange(this.GetPredicates<TContent>(groups.Where(p => p.Permissions[permission] == PermissionValue.Allow), userKey));
 			denyExpressions.AddRange(this.GetPredicates<TContent>(groups.Where(p => p.Permissions[permission] == PermissionValue.Deny), userKey, negate: true));
 

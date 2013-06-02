@@ -32,12 +32,12 @@ security
 
 // define some permission rules (who can do what?)
 security
-   .AddPermission("blog-reader",      "read-blog", PermissionValue.Allow)
-   .AddPermission("blog-submitter",   "read-blog", PermissionValue.Allow)
-   .AddPermission("blog-submitter",   "edit-blog", PermissionValue.Allow)
-   .AddPermission("blog-contributor", "read-blog", PermissionValue.Allow)
-   .AddPermission("blog-contributor", "edit-blog", PermissionValue.Allow)
-   .AddPermission("banned",           "read-blog", PermissionValue.Deny);
+   .AddPermission<BlogPost>("blog-reader",      "read-blog", PermissionValue.Allow)
+   .AddPermission<BlogPost>("blog-submitter",   "read-blog", PermissionValue.Allow)
+   .AddPermission<BlogPost>("blog-submitter",   "edit-blog", PermissionValue.Allow)
+   .AddPermission<BlogPost>("blog-contributor", "read-blog", PermissionValue.Allow)
+   .AddPermission<BlogPost>("blog-contributor", "edit-blog", PermissionValue.Allow)
+   .AddPermission<BlogPost>("banned",           "read-blog", PermissionValue.Deny);
 ```
 
 Now you can filter any collection of blog posts using your security rules. You can even do this on
@@ -75,10 +75,23 @@ IQueryable<BlogPost> canRead = security.Filter(blogs, "read-blog", user);
 IQueryable<BlogPost> canEdit = security.Filter(blogs, "edit-blog", user);
 ```
 
-### Testing a single content
-You can test a user's permission against a single content. For example:
+### Testing a single content object
+You can test a user's permission against a single content ibject. For example:
 ```c#
 // can I read or edit _this_ blog post?
 bool canRead = security.Test(blogPost, "read-blog", user);
 bool canEdit = security.Test(blogPost, "edit-blog", user);
+```
+
+### Polymorphic content types
+The predicate filter matches security against the exact content type; it doesn't support polymorphism
+out of the box. That is, if you define a security group and permissions for `BlogPost` entities, you
+can't check their permissions against `BlogPostSubclass` entities (unless you cast them).
+
+If you need polymorphic support, you can enable group name reuse and configure the group for each type:
+```c#
+var security = new PredicateFilter<int>();
+security.AllowReusingGroupNames = true;
+security.AddGroup<BlogPost>("blog-reader", (blog, userId) => !blog.Draft);
+security.AddGroup<BlogPostSubclass>("blog-reader", (blog, userId) => !blog.Draft);
 ```
