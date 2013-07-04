@@ -1,8 +1,8 @@
-﻿using NUnit.Framework;
-using Pathoschild.PredicateSecurity.Tests.Models;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using NUnit.Framework;
+using Pathoschild.PredicateSecurity.Tests.Models;
 
 namespace Pathoschild.PredicateSecurity.Tests
 {
@@ -52,6 +52,34 @@ namespace Pathoschild.PredicateSecurity.Tests
 			// apply filter
 			string[] titles = filter
 				.Filter(posts, permission, users[user])
+				.OrderBy(p => p.ID)
+				.Select(p => p.Title)
+				.ToArray();
+			return String.Join(", ", titles);
+		}
+
+		/// <summary>Assert that the predicate filter correctly indicates whether a user matches a relational group for a content object for the defined set of security rules.</summary>
+		/// <param name="userKey">The name of the user defined by <see cref="GetUsers"/> whose security to predicate.</param>
+		/// <param name="groupName">The group name to check for.</param>
+		/// <remarks>Each test case asserts security assumptions using the configuration set by <see cref="GetFilter"/>.</remarks>
+		[Test(Description = "Assert that the predicate filter correctly filters a collection based on a set of security rules.")]
+		[TestCase("submitter", "post-submitter", Result = "The best post, The most ambitious post")]
+		[TestCase("submitter", "post-editor", Result = "The best post")]
+		[TestCase("editor", "post-submitter", Result = "")]
+		[TestCase("editor", "post-editor", Result = "The most ambitious post")]
+		[TestCase("siteAdmin", "post-submitter", Result = "The forgotten post")]
+		[TestCase("siteAdmin", "post-editor", Result = "")]
+		public string Is_MatchesExpectedValues(string userKey, string groupName)
+		{
+			// set up
+			PredicateFilter<User, int> filter = this.GetFilter();
+			IQueryable<BlogPost> posts = this.GetPosts(this.GetUsers());
+			User user = this.GetUsers()[userKey];
+
+			// apply filter
+			string[] titles = posts
+				.ToArray() // we're not testing NHibernate compatibility here; this is just a convenient way to compare the result against every blog
+				.Where(p => filter.Is(p, groupName, user))
 				.OrderBy(p => p.ID)
 				.Select(p => p.Title)
 				.ToArray();

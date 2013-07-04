@@ -83,23 +83,21 @@ namespace Pathoschild.PredicateSecurity
 		/// <returns>Returns the current instance for chaining.</returns>
 		public PredicateFilter<TUser, TUserKey> AddPermission<TContent>(string groupName, string name, PermissionValue value)
 		{
-			// get group
-			Group group = this.Groups.FirstOrDefault(p => p.ContentType == typeof(TContent) && p.Name == groupName);
-			if (group == null)
-			{
-				if(!this.AllowReusingGroupNames)
-					throw new InvalidOperationException(String.Format("There is no group named '{0}'.", groupName));
-
-				string error = String.Format("There is no group named '{0}' for the {1} content type.", groupName, typeof(TContent));
-				Type[] definedForTypes = this.Groups.Where(p => p.Name == groupName).Select(p => p.ContentType).ToArray();
-				if (definedForTypes.Any())
-					error += String.Format(" (The name is defined for the following content types: {0}.)", String.Join(", ", definedForTypes.Select(p => p.FullName)));
-				throw new InvalidOperationException(error);
-			}
-
-			// add permission
+			Group group = this.GetGroup<TContent>(groupName);
 			group.Permissions[name] = value;
 			return this;
+		}
+
+		/// <summary>Get whether a user matches a relational group for a content.</summary>
+		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
+		/// <param name="content">The content to check.</param>
+		/// <param name="group">The name of the group to predicate.</param>
+		/// <param name="user">The user to pass to the group predicate.</param>
+		public bool Is<TContent>(TContent content, string group, TUser user)
+		{
+			Group metadata = this.GetGroup<TContent>(group);
+			TUserKey key = this.GetUserKey(user);
+			return metadata.GetExpression<TContent, TUserKey>().Compile().Invoke(content, key);
 		}
 
 		/// <summary>Apply a predicate that enforces the configured security rules on a query.</summary>
@@ -170,10 +168,27 @@ namespace Pathoschild.PredicateSecurity
 			return predicate;
 		}
 
+		/// <summary>Get a defined security group.</summary>
+		/// <typeparam name="TContent">The type of the related content.</typeparam>
+		/// <param name="groupName">The name of the group to which to add permissions.</param>
+		/// <exception cref="InvalidOperationException">There is no group for the given name and content type.</exception>
+		protected Group GetGroup<TContent>(string groupName)
+		{
+			Group group = this.Groups.FirstOrDefault(p => p.ContentType == typeof(TContent) && p.Name == groupName);
+			if (group == null)
+			{
+				if (!this.AllowReusingGroupNames)
+					throw new InvalidOperationException(String.Format("There is no group named '{0}'.", groupName));
 
-		/*********
-		** Protected methods
-		*********/
+				string error = String.Format("There is no group named '{0}' for the {1} content type.", groupName, typeof(TContent));
+				Type[] definedForTypes = this.Groups.Where(p => p.Name == groupName).Select(p => p.ContentType).ToArray();
+				if (definedForTypes.Any())
+					error += String.Format(" (The name is defined for the following content types: {0}.)", String.Join(", ", definedForTypes.Select(p => p.FullName)));
+				throw new InvalidOperationException(error);
+			}
+			return group;
+		}
+
 		/// <summary>Get the value for a user's global permission.</summary>
 		/// <param name="permission">The name of the permission to predicate.</param>
 		/// <param name="user">The user to pass whose key to the group predicate.</param>
