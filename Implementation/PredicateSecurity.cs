@@ -12,14 +12,14 @@ namespace Pathoschild.PredicateSecurity
 	/// <typeparam name="TUserKey">The type of the key which uniquely identifies the user.</typeparam>
 	/// <remarks>
 	/// This class implements content-relational security. It lets you define LINQ predicates that match users to relational groups (such as "blog-submitter" or "blog-owner"), assign permissions to those groups, and then filter arbitrary collections by specifying a required permission.
-	/// 
+	///
 	/// A minimal example looks like the following. The defines a new group that can edit blogs, and then applies a filter to a database queries so only blogs the current user can edit are returned.
 	/// <code>
 	/// // which blogs can I edit?
 	/// SecurityPredicateFilter filter = new SecurityPredicateFilter();
 	/// filter.AddGroup&lt;Blog&gt;("blog-editor", (blog, userID) => blog.Champion.ID == userID));
 	/// filter.AddPermission("blog-editor", "blog-edit", PermissionValue.Allow);
-	/// 
+	///
 	/// IQueryable&lt;Blog&gt; canEdit = filter.Filter(db.Get&lt;Blog&gt;(), "blog-edit", user.ID);
 	/// </code>
 	/// </remarks>
@@ -63,7 +63,7 @@ namespace Pathoschild.PredicateSecurity
 		/// <param name="name">The name of the group.</param>
 		/// <param name="match">A predicate that returns true if this group applies for the input content and userKey.</param>
 		/// <returns>Returns the current instance for chaining.</returns>
-		public PredicateFilter<TUser, TUserKey> AddGroup<TContent>(string name, Expression<Func<TContent, int, bool>> match)
+		public PredicateFilter<TUser, TUserKey> AddGroup<TContent>(string name, Expression<Func<TContent, TUserKey, bool>> match)
 		{
 			// validate
 			if (this.Groups.Any(p => p.ContentType == typeof(TContent) && p.Name == name))
@@ -131,11 +131,14 @@ namespace Pathoschild.PredicateSecurity
 			return this.Filter<TContent>(new[] { content }.AsQueryable(), permission, user).Any();
 		}
 
+		/*********
+		** Protected methods
+		*********/
 		/// <summary>Construct a predicate that returns true if the user has a permission for a content.</summary>
 		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
 		/// <param name="permission">The name of the permission to predicate.</param>
 		/// <param name="user">The user to pass whose key to the group predicate.</param>
-		Expression<Func<TContent, bool>> BuildPredicate<TContent>(string permission, TUser user)
+		protected Expression<Func<TContent, bool>> BuildPredicate<TContent>(string permission, TUser user)
 		{
 			// init data
 			TUserKey userKey = this.GetUserKey(user);
@@ -178,7 +181,7 @@ namespace Pathoschild.PredicateSecurity
 		{
 			if (this.GetGlobalPermissions != null)
 			{
-				IEnumerable<KeyValuePair<string, PermissionValue>> globalPermissions = this.GetGlobalPermissions(user).Where(p => p.Key.Equals(permission, StringComparison.InvariantCultureIgnoreCase));
+				KeyValuePair<string, PermissionValue>[] globalPermissions = this.GetGlobalPermissions(user).Where(p => p.Key.Equals(permission, StringComparison.InvariantCultureIgnoreCase)).ToArray();
 				if (globalPermissions.Any(p => p.Value == PermissionValue.Deny))
 					return PermissionValue.Deny;
 				if (globalPermissions.Any(p => p.Value == PermissionValue.Allow))
@@ -209,22 +212,22 @@ namespace Pathoschild.PredicateSecurity
 		protected IEnumerable<Expression<Func<TContent, bool>>> GetPredicates<TContent>(IEnumerable<Group> groups, TUserKey userKey, bool negate = false)
 		{
 			return groups
-				.Select(group => group.GetExpression<TContent>())
+				.Select(group => group.GetExpression<TContent, TUserKey>())
 				.Select(predicate => this.GetPredicate(predicate, userKey, negate));
 		}
 
-		/// <summary>Construct a predicate that returns true if the user matches a group. This constructs a wrapper around a predicate returned by <see cref="Group.GetExpression{TContent}"/>.</summary>
+		/// <summary>Construct a predicate that returns true if the user matches a group. This constructs a wrapper around a predicate returned by <see cref="Group.GetExpression{TContent, TUserType}"/>.</summary>
 		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
 		/// <param name="predicate">The predicate which returns true if the user matches the group.</param>
 		/// <param name="userKey">The unique key of the user to pass to the group predicate.</param>
 		/// <param name="negate">Whether to negate the group predicate, so that it returns true if the user does <em>not</em> match the group instead.</param>
-		protected Expression<Func<TContent, bool>> GetPredicate<TContent>(Expression<Func<TContent, int, bool>> predicate, TUserKey userKey, bool negate = false)
+		protected Expression<Func<TContent, bool>> GetPredicate<TContent>(Expression<Func<TContent, TUserKey, bool>> predicate, TUserKey userKey, bool negate = false)
 		{
 			return Expression.Lambda<Func<TContent, bool>>(
 					Expression.Invoke(
 						negate ? this.Negate(predicate) : predicate,
 						predicate.Parameters.First(),
-						Expression.Constant(userKey, typeof(int))
+						Expression.Constant(userKey, typeof(TUserKey))
 					),
 					predicate.Parameters.First()
 				);
@@ -233,9 +236,9 @@ namespace Pathoschild.PredicateSecurity
 		/// <summary>Negate a group predicate, so that it returns the opposite of its normal value.</summary>
 		/// <typeparam name="TContent">The type of content to predicate.</typeparam>
 		/// <param name="predicate">The predicate to inverse.</param>
-		protected Expression<Func<TContent, int, bool>> Negate<TContent>(Expression<Func<TContent, int, bool>> predicate)
+		protected Expression<Func<TContent, TUserKey, bool>> Negate<TContent>(Expression<Func<TContent, TUserKey, bool>> predicate)
 		{
-			return Expression.Lambda<Func<TContent, int, bool>>(
+			return Expression.Lambda<Func<TContent, TUserKey, bool>>(
 				Expression.Not(predicate.Body),
 				predicate.Parameters
 			);

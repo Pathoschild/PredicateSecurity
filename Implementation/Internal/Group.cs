@@ -40,11 +40,12 @@ namespace Pathoschild.PredicateSecurity.Internal
 
 		/// <summary>Get the predicate that returns true if this group applies for the input content and userID.</summary>
 		/// <typeparam name="TContent">The content type to match.</typeparam>
-		public Expression<Func<TContent, int, bool>> GetExpression<TContent>()
+		/// <typeparam name="TUserKey">The type of the key which uniquely identifies the user.</typeparam>
+		public Expression<Func<TContent, TUserKey, bool>> GetExpression<TContent, TUserKey>()
 		{
-			if (!(this.Match is Expression<Func<TContent, int, bool>>))
+			if (!(this.Match is Expression<Func<TContent, TUserKey, bool>>))
 				throw new InvalidCastException(String.Format("The security group {0} is not relevant to content of type {1}. It can only be applied to content of type {2}.", this.Name, typeof(TContent), this.ContentType));
-			return this.Match as Expression<Func<TContent, int, bool>>;
+			return this.Match as Expression<Func<TContent, TUserKey, bool>>;
 		}
 	}
 }
